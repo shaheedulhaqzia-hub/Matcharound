@@ -32,6 +32,20 @@ export type ModerationSource =
   | 'video_call_frame';
 
 export async function checkImage(base64: string): Promise<ModerationResult> {
+  // 1st choice: the 'moderate-image' Supabase Edge Function (free, no card).
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.functions.invoke('moderate-image', {
+        body: { imageBase64: base64 },
+      });
+      if (!error && data && typeof data.nude === 'boolean') {
+        return { checked: true, nude: data.nude, score: Number(data.score ?? 0) };
+      }
+    } catch {
+      // fall through to the optional self-hosted detector
+    }
+  }
+  // 2nd choice: optional self-hosted NSFWJS server (server/ folder).
   if (!MODERATION_URL) return { checked: false, nude: false, score: 0 };
   try {
     const controller = new AbortController();
