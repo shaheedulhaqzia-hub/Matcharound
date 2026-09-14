@@ -2,17 +2,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useApp } from '@/context/AppContext';
+import { checkImage, banCurrentUser } from '@/lib/moderation';
 import { personById } from '@/lib/people';
 import { colors } from '@/lib/theme';
 import type { CallMode } from '@/lib/types';
 
+const MODERATION_INTERVAL_MS = 15000;
+
 export default function CallScreen() {
   const { id, mode } = useLocalSearchParams<{ id: string; mode?: CallMode }>();
   const router = useRouter();
+  const { userId, markBanned } = useApp();
   const person = personById(id ?? '');
   const isVideo = (mode ?? 'video') === 'video';
   const [permission, requestPermission] = useCameraPermissions();
@@ -22,6 +27,39 @@ export default function CallScreen() {
   const [cameraOff, setCameraOff] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [status, setStatus] = useState<'connecting' | 'live'>('connecting');
+  const cameraRef = useRef<CameraView>(null);
+  const checkingRef = useRef(false);
+
+  // Safety scan: every 15s a low-res frame from the caller's camera is
+  // checked for nudity. A detection saves the frame as proof, auto-bans
+  // the account (pending manual operator review), and ends the call.
+  useEffect(() => {
+    if (!isVideo || !userId || cameraOff || status !== 'live' || !permission?.granted) return;
+    const timer = setInterval(async () => {
+      if (checkingRef.current || !cameraRef.current) return;
+      checkingRef.current = true;
+      try {
+        const shot = await cameraRef.current.takePictureAsync({
+          base64: true,
+          quality: 0.3,
+          shutterSound: false,
+        });
+        if (shot?.base64) {
+          const result = await checkImage(shot.base64);
+          if (result.checked && result.nude) {
+            await banCurrentUser(userId, 'video_call_frame', shot.base64, result.score);
+            markBanned();
+            router.replace('/banned');
+          }
+        }
+      } catch {
+        // frame capture can fail while the camera is busy — skip this round
+      } finally {
+        checkingRef.current = false;
+      }
+    }, MODERATION_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [isVideo, userId, cameraOff, status, permission?.granted, markBanned, router]);
 
   useEffect(() => {
     if (isVideo && permission && !permission.granted) {
@@ -57,7 +95,7 @@ export default function CallScreen() {
   return (
     <View style={styles.root}>
       {isVideo && permission?.granted && !cameraOff ? (
-        <CameraView style={StyleSheet.absoluteFill} facing={facing} mute={muted} />
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing={facing} mute={muted} />
       ) : (
         <Image source={{ uri: person.photo }} style={StyleSheet.absoluteFill} contentFit="cover" />
       )}
@@ -68,6 +106,12 @@ export default function CallScreen() {
           <Text style={styles.kind}>{isVideo ? 'Video call' : 'Voice call'}</Text>
           <Text style={styles.name}>{person.name}</Text>
           <Text style={styles.status}>{status === 'connecting' ? 'Connecting nearby…' : clock}</Text>
+          {isVideo ? (
+            <View style={styles.safety}>
+              <Ionicons name="shield-checkmark" size={12} color={colors.green} />
+              <Text style={styles.safetyText}>Protected by AI safety scan</Text>
+            </View>
+          ) : null}
         </View>
 
         {!isVideo || cameraOff ? (
@@ -124,6 +168,17 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 18 },
   top: { alignItems: 'center', paddingTop: 8 },
   kind: { color: colors.gold, fontWeight: '700', letterSpacing: 0.4 },
+  safety: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  safetyText: { color: colors.white, fontSize: 11, opacity: 0.9 },
   name: { color: colors.white, fontSize: 28, fontWeight: '800', marginTop: 6 },
   status: { color: colors.white, opacity: 0.8, marginTop: 4 },
   center: { alignItems: 'center', gap: 14 },

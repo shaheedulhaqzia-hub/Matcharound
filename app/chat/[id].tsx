@@ -16,8 +16,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TypingDots } from '@/components/TypingDots';
 import { useApp } from '@/context/AppContext';
+import { moderateImage } from '@/lib/moderation';
 import { formatDistance, personById } from '@/lib/people';
 import { colors, radius } from '@/lib/theme';
+import { pickImage, uploadImage } from '@/lib/upload';
 
 const replies = [
   'I’m nearby too — want to jump on a voice call?',
@@ -29,10 +31,11 @@ const replies = [
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { messages, sendMessage, addIncoming, like } = useApp();
+  const { messages, sendMessage, addIncoming, like, userId, markBanned } = useApp();
   const person = personById(id ?? '');
   const thread = messages[id ?? ''] ?? [];
   const [draft, setDraft] = useState('');
+  const [sendingImage, setSendingImage] = useState(false);
   const [theyTyping, setTheyTyping] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const replyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -58,6 +61,31 @@ export default function ChatScreen() {
       </SafeAreaView>
     );
   }
+
+  // Send a photo: nudity is checked first. A nude photo = instant ban
+  // with the image saved as proof for the human moderator.
+  const onSendImage = async () => {
+    const picked = await pickImage();
+    if (!picked) return;
+    setSendingImage(true);
+    try {
+      if (userId) {
+        const verdict = await moderateImage(userId, picked.base64, 'chat_image');
+        if (verdict === 'banned') {
+          markBanned();
+          return;
+        }
+        const url = await uploadImage('chat-images', userId, picked.base64);
+        sendMessage(person.id, '', url);
+      } else {
+        sendMessage(person.id, '', picked.uri); // demo mode: local only
+      }
+    } catch {
+      // upload failed — drop silently, user can retry
+    } finally {
+      setSendingImage(false);
+    }
+  };
 
   const onSend = () => {
     const text = draft.trim();
@@ -99,8 +127,17 @@ export default function ChatScreen() {
         keyboardVerticalOffset={8}>
         <ScrollView ref={scrollRef} contentContainerStyle={styles.thread} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
           {thread.map((msg) => (
-            <View key={msg.id} style={[styles.bubble, msg.fromMe ? styles.mine : styles.theirs]}>
-              <Text style={styles.bubbleText}>{msg.text}</Text>
+            <View
+              key={msg.id}
+              style={[
+                styles.bubble,
+                msg.fromMe ? styles.mine : styles.theirs,
+                msg.imageUrl ? styles.imageBubble : null,
+              ]}>
+              {msg.imageUrl ? (
+                <Image source={{ uri: msg.imageUrl }} style={styles.bubbleImage} contentFit="cover" />
+              ) : null}
+              {msg.text ? <Text style={styles.bubbleText}>{msg.text}</Text> : null}
             </View>
           ))}
           {theyTyping ? (
@@ -119,6 +156,12 @@ export default function ChatScreen() {
             </View>
           ) : null}
           <View style={styles.inputRow}>
+            <Pressable
+              style={[styles.attach, sendingImage && styles.sendOff]}
+              onPress={onSendImage}
+              disabled={sendingImage}>
+              <Ionicons name={sendingImage ? 'hourglass' : 'image'} size={18} color={colors.text} />
+            </Pressable>
             <TextInput
               value={draft}
               onChangeText={setDraft}
@@ -164,6 +207,18 @@ const styles = StyleSheet.create({
   },
   thread: { padding: 16, gap: 10, paddingBottom: 20 },
   bubble: { maxWidth: '78%', borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 10 },
+  imageBubble: { padding: 4, overflow: 'hidden' },
+  bubbleImage: { width: 220, height: 220, borderRadius: radius.md - 4 },
+  attach: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+    marginBottom: 2,
+  },
   mine: { alignSelf: 'flex-end', backgroundColor: colors.accent },
   theirs: { alignSelf: 'flex-start', backgroundColor: colors.card },
   bubbleText: { color: colors.white, fontSize: 16, lineHeight: 22 },

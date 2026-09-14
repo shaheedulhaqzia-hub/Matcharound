@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "Matcharound",
-    "slug": "Matcharound",
+    "slug": "match-around",
+    "owner": "shaheedulhaqzias-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -60,8 +61,19 @@
         {
           "locationWhenInUsePermission": "Matcharound uses your location to show people near you."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Matcharound lets you add profile, cover, and gallery photos."
+        }
       ]
     ],
+    "extra": {
+      "eas": {
+        "projectId": "54b75382-2593-489e-894a-45da1a300379"
+      }
+    },
     "experiments": {
       "typedRoutes": true
     }

@@ -2,18 +2,39 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApp } from '@/context/AppContext';
+import { follow, isFollowing, unfollow } from '@/lib/db';
 import { formatDistance, personById } from '@/lib/people';
 import { colors, radius } from '@/lib/theme';
 
 export default function PersonScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { like, matches } = useApp();
+  const { like, matches, userId } = useApp();
   const person = personById(id ?? '');
+  const [following, setFollowing] = useState(false);
+
+  useEffect(() => {
+    if (userId && id) {
+      isFollowing(userId, id).then(setFollowing);
+    }
+  }, [userId, id]);
+
+  const toggleFollow = async () => {
+    if (!userId || !person) return;
+    const next = !following;
+    setFollowing(next); // optimistic
+    try {
+      if (next) await follow(userId, person.id);
+      else await unfollow(userId, person.id);
+    } catch {
+      setFollowing(!next);
+    }
+  };
 
   if (!person) {
     return (
@@ -35,9 +56,25 @@ export default function PersonScreen() {
         </Pressable>
       </SafeAreaView>
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <Text style={styles.name}>
-          {person.name}, {person.age}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>
+            {person.name}, {person.age}
+          </Text>
+          {userId ? (
+            <Pressable
+              style={[styles.follow, following && styles.followOn]}
+              onPress={toggleFollow}>
+              <Ionicons
+                name={following ? 'checkmark' : 'person-add'}
+                size={15}
+                color={following ? colors.green : colors.white}
+              />
+              <Text style={[styles.followText, following && styles.followTextOn]}>
+                {following ? 'Following' : 'Follow'}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         <Text style={styles.job}>{person.job}</Text>
         <View style={styles.distRow}>
           <Ionicons name="navigate" size={16} color={colors.gold} />
@@ -103,7 +140,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   body: { paddingHorizontal: 20, paddingBottom: 40, marginTop: -40 },
-  name: { color: colors.text, fontSize: 32, fontWeight: '800' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  name: { color: colors.text, fontSize: 32, fontWeight: '800', flexShrink: 1 },
+  follow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accent,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  followOn: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
+  followText: { color: colors.white, fontWeight: '700', fontSize: 13 },
+  followTextOn: { color: colors.green },
   job: { color: colors.muted, marginTop: 4, fontSize: 16 },
   distRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   dist: { color: colors.gold, fontWeight: '700' },

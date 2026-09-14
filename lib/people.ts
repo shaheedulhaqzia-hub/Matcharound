@@ -109,8 +109,18 @@ export const people: Person[] = [
   },
 ];
 
+let livePeople: Person[] = people;
+
+export function setLivePeople(next: Person[]) {
+  if (next.length) livePeople = next;
+}
+
+export function allPeople() {
+  return livePeople;
+}
+
 export function personById(id: string) {
-  return people.find((p) => p.id === id);
+  return livePeople.find((p) => p.id === id) ?? people.find((p) => p.id === id);
 }
 
 export function formatDistance(km: number) {
