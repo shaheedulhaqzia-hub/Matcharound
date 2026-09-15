@@ -18,7 +18,9 @@ import {
 } from '@/lib/db';
 import { people, setLivePeople } from '@/lib/people';
 import { supabase } from '@/lib/supabase';
-import type { AuthStatus, ChatMessage, Person, Profile } from '@/lib/types';
+import type { AuthStatus, ChatMessage, Person, Profile, SearchFilters } from '@/lib/types';
+
+const defaultFilters: SearchFilters = { gender: null, minAge: 18, maxAge: 99, city: '' };
 
 type AppState = {
   authStatus: AuthStatus;
@@ -29,6 +31,14 @@ type AppState = {
   markBanned: () => void;
   radiusKm: number;
   setRadiusKm: (km: number) => void;
+  filters: SearchFilters;
+  setFilters: (f: SearchFilters) => void;
+  /** Label of the manually chosen place, or null when using real GPS. */
+  locationLabel: string | null;
+  /** Search from a typed place (city / country). Returns false when not found. */
+  setManualLocation: (query: string) => Promise<boolean>;
+  /** Go back to searching around the real GPS position. */
+  clearManualLocation: () => void;
   passedIds: string[];
   matchedIds: string[];
   nearby: Person[];
@@ -59,6 +69,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [banReason, setBanReason] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [manualPlace, setManualPlace] = useState<{ lat: number; lng: number; label: string } | null>(
+    null
+  );
+  const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
   const [directory, setDirectory] = useState<Person[]>(people);
   const [radiusKm, setRadiusKm] = useState(10);
   const [passedIds, setPassedIds] = useState<string[]>([]);
@@ -132,15 +146,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [authStatus, userId]);
 
+  // Search from the manually chosen place, or the real GPS position.
+  const center = manualPlace ?? coords;
+
   // Nearby people ranked by true distance (demo list stays as fallback).
   useEffect(() => {
-    if (!coords) return;
-    fetchNearby(coords.lat, coords.lng, 200)
+    if (!center) return;
+    fetchNearby(center.lat, center.lng, Math.max(500, radiusKm), filters)
       .then((list) => {
-        if (list.length) setDirectory(list);
+        if (list.length || manualPlace || filters !== defaultFilters) setDirectory(list);
       })
       .catch(() => {});
-  }, [coords]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center?.lat, center?.lng, radiusKm, filters]);
+
+  const setManualLocation = useCallback(async (query: string): Promise<boolean> => {
+    const q = query.trim();
+    if (!q) return false;
+    try {
+      const results = await Location.geocodeAsync(q);
+      const first = results[0];
+      if (!first) return false;
+      setManualPlace({ lat: first.latitude, lng: first.longitude, label: q });
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const clearManualLocation = useCallback(() => setManualPlace(null), []);
 
   useEffect(() => {
     setLivePeople(directory);
@@ -209,6 +243,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       markBanned,
       radiusKm,
       setRadiusKm,
+      filters,
+      setFilters,
+      locationLabel: manualPlace?.label ?? null,
+      setManualLocation,
+      clearManualLocation,
       passedIds,
       matchedIds,
       nearby,
@@ -227,6 +266,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshProfile,
       markBanned,
       radiusKm,
+      filters,
+      manualPlace,
+      setManualLocation,
+      clearManualLocation,
       passedIds,
       matchedIds,
       nearby,

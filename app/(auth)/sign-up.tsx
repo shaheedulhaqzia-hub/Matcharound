@@ -18,12 +18,27 @@ import { ageFromDob, normalizePhone, parseDob, signUpWithEmail, toIsoDate } from
 import { phoneInUse, upsertProfile } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { colors, radius } from '@/lib/theme';
+import type { Gender, InterestedIn } from '@/lib/types';
+
+const genderOptions: { value: Gender; label: string }[] = [
+  { value: 'woman', label: 'Woman' },
+  { value: 'man', label: 'Man' },
+  { value: 'other', label: 'Other' },
+];
+
+const interestOptions: { value: InterestedIn; label: string }[] = [
+  { value: 'women', label: 'Women' },
+  { value: 'men', label: 'Men' },
+  { value: 'everyone', label: 'Everyone' },
+];
 
 export default function SignUpScreen() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState<Gender | null>(null);
+  const [interestedIn, setInterestedIn] = useState<InterestedIn>('everyone');
   const [password, setPassword] = useState('');
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
@@ -37,6 +52,7 @@ export default function SignUpScreen() {
     if (!email.trim().includes('@')) return setError('Please enter a valid email.');
     const normalizedPhone = normalizePhone(phone);
     if (!normalizedPhone) return setError('Please enter a valid phone number.');
+    if (!gender) return setError('Please select your gender.');
     const dob = parseDob(day, month, year);
     if (!dob) return setError('Please enter a valid date of birth (DD MM YYYY).');
     const age = ageFromDob(dob);
@@ -59,6 +75,8 @@ export default function SignUpScreen() {
           dob: toIsoDate(dob),
           age,
           phone: normalizedPhone,
+          gender,
+          interested_in: interestedIn,
           bio: '',
           job: '',
           city: '',
@@ -117,6 +135,35 @@ export default function SignUpScreen() {
             placeholderTextColor={colors.muted}
             keyboardType="phone-pad"
           />
+
+          <Text style={styles.label}>I am a</Text>
+          <View style={styles.chipRow}>
+            {genderOptions.map((opt) => (
+              <Pressable
+                key={opt.value}
+                style={[styles.choice, gender === opt.value && styles.choiceOn]}
+                onPress={() => setGender(opt.value)}>
+                <Text style={[styles.choiceText, gender === opt.value && styles.choiceTextOn]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={styles.label}>Interested in</Text>
+          <View style={styles.chipRow}>
+            {interestOptions.map((opt) => (
+              <Pressable
+                key={opt.value}
+                style={[styles.choice, interestedIn === opt.value && styles.choiceOn]}
+                onPress={() => setInterestedIn(opt.value)}>
+                <Text
+                  style={[styles.choiceText, interestedIn === opt.value && styles.choiceTextOn]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
           <Text style={styles.label}>Date of birth (18+ required)</Text>
           <View style={styles.dobRow}>
@@ -190,6 +237,19 @@ const styles = StyleSheet.create({
   dobRow: { flexDirection: 'row', gap: 10 },
   dob: { flex: 1, textAlign: 'center' },
   dobYear: { flex: 1.6, textAlign: 'center' },
+  chipRow: { flexDirection: 'row', gap: 10 },
+  choice: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  choiceOn: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+  choiceText: { color: colors.muted, fontWeight: '700' },
+  choiceTextOn: { color: colors.accent },
   error: { color: colors.accent, marginTop: 14, fontWeight: '600' },
   submit: {
     backgroundColor: colors.accent,

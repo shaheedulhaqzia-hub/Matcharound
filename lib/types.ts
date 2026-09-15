@@ -11,12 +11,25 @@ export type Person = {
   online: boolean;
 };
 
+export type Gender = 'woman' | 'man' | 'other';
+export type InterestedIn = 'women' | 'men' | 'everyone';
+
+/** Search filters for finding matches (location, gender, age, city). */
+export type SearchFilters = {
+  gender: Gender | null; // null = everyone
+  minAge: number;
+  maxAge: number;
+  city: string; // '' = anywhere
+};
+
 export type Profile = {
   id: string;
   name: string;
   age: number;
   dob: string | null;
   phone: string | null;
+  gender: Gender | null;
+  interestedIn: InterestedIn;
   city: string;
   bio: string;
   job: string;

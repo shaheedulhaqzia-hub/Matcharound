@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Person, Post, Profile } from './types';
+import type { Person, Post, Profile, SearchFilters } from './types';
 
 function rowToProfile(row: Record<string, any>): Profile {
   return {
@@ -8,6 +8,8 @@ function rowToProfile(row: Record<string, any>): Profile {
     age: Number(row.age ?? 0),
     dob: row.dob ? String(row.dob) : null,
     phone: row.phone ? String(row.phone) : null,
+    gender: row.gender ? (String(row.gender) as Profile['gender']) : null,
+    interestedIn: (row.interested_in ? String(row.interested_in) : 'everyone') as Profile['interestedIn'],
     city: String(row.city ?? ''),
     bio: String(row.bio ?? ''),
     job: String(row.job ?? ''),
@@ -34,6 +36,8 @@ export async function upsertProfile(profile: {
   dob: string;
   age: number;
   phone?: string;
+  gender?: string;
+  interested_in?: string;
   bio?: string;
   job?: string;
   city?: string;
@@ -79,13 +83,18 @@ export async function updateLocation(userId: string, lat: number, lng: number): 
 export async function fetchNearby(
   lat: number,
   lng: number,
-  radiusKm: number
+  radiusKm: number,
+  filters?: SearchFilters
 ): Promise<Person[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase.rpc('nearby_profiles', {
+  const { data, error } = await supabase.rpc('search_profiles', {
     user_lat: lat,
     user_lng: lng,
     radius_km: radiusKm,
+    p_gender: filters?.gender ?? null,
+    p_min_age: filters?.minAge ?? 18,
+    p_max_age: filters?.maxAge ?? 120,
+    p_city: filters?.city?.trim() || null,
   });
   if (error || !data) return [];
   return (data as Record<string, any>[]).map((row) => ({
