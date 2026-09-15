@@ -142,6 +142,7 @@ export default function RootLayout() {
           <Stack.Screen name="complete-profile" options={{ animation: 'fade' }} />
           <Stack.Screen name="banned" options={{ animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen name="person/[id]" />
+          <Stack.Screen name="group/[id]" />
           <Stack.Screen name="chat/[id]" />
           <Stack.Screen
             name="call/[id]"

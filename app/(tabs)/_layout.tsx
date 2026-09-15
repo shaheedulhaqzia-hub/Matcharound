@@ -6,7 +6,7 @@ import { useApp } from '@/context/AppContext';
 import { colors } from '@/lib/theme';
 
 export default function TabLayout() {
-  const { pendingFriendRequests } = useApp();
+  const { pendingFriendRequests, pendingGroupRequests } = useApp();
   return (
     <Tabs
       screenOptions={{
@@ -47,6 +47,17 @@ export default function TabLayout() {
           tabBarBadgeStyle: { backgroundColor: colors.accent, color: colors.white },
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="groups"
+        options={{
+          title: 'Groups',
+          tabBarBadge: pendingGroupRequests > 0 ? pendingGroupRequests : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.accent, color: colors.white },
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-circle" size={size} color={color} />
           ),
         }}
       />

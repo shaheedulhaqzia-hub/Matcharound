@@ -19,6 +19,7 @@ import {
   updateLocation,
 } from '@/lib/db';
 import { fetchIncomingRequests, heartbeat } from '@/lib/friends';
+import { fetchAdminPendingCount } from '@/lib/groups';
 import { people, setLivePeople } from '@/lib/people';
 import { supabase } from '@/lib/supabase';
 import type { AuthStatus, ChatMessage, Person, Profile, SearchFilters } from '@/lib/types';
@@ -47,6 +48,9 @@ type AppState = {
   /** Incoming pending friend requests (drives tab badge + notifications). */
   pendingFriendRequests: number;
   refreshFriendBadge: () => Promise<void>;
+  /** Join requests waiting on groups I admin. */
+  pendingGroupRequests: number;
+  refreshGroupBadge: () => Promise<void>;
   passedIds: string[];
   matchedIds: string[];
   nearby: Person[];
@@ -86,6 +90,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [passedIds, setPassedIds] = useState<string[]>([]);
   const [matchedIds, setMatchedIds] = useState<string[]>(['p1']);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
+  const [pendingGroupRequests, setPendingGroupRequests] = useState(0);
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(starterChats);
 
   const applySession = useCallback(async (sessionUserId: string | null) => {
@@ -197,6 +202,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPendingFriendRequests(reqs.length);
   }, [userId]);
 
+  const refreshGroupBadge = useCallback(async () => {
+    if (!userId) return;
+    setPendingGroupRequests(await fetchAdminPendingCount());
+  }, [userId]);
+
   // Friend request notifications: badge count + realtime in-app alert.
   useEffect(() => {
     if (authStatus !== 'ready' || !userId || !supabase) return;
@@ -221,6 +231,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
       supabase?.removeChannel(channel);
     };
   }, [authStatus, userId, refreshFriendBadge]);
+
+  useEffect(() => {
+    if (authStatus !== 'ready' || !userId || !supabase) return;
+    refreshGroupBadge();
+    const channel = supabase
+      .channel('group-join-requests')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'group_join_requests' },
+        async () => {
+          const next = await fetchAdminPendingCount();
+          setPendingGroupRequests((prev) => {
+            if (next > prev) {
+              Alert.alert(
+                'Group join request',
+                'Someone asked to join a group you admin. Open the Groups tab to accept or decline.'
+              );
+            }
+            return next;
+          });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase?.removeChannel(channel);
+    };
+  }, [authStatus, userId, refreshGroupBadge]);
 
   const setManualLocation = useCallback(async (query: string): Promise<boolean> => {
     const q = query.trim();
@@ -313,6 +350,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       myCoords: coords,
       pendingFriendRequests,
       refreshFriendBadge,
+      pendingGroupRequests,
+      refreshGroupBadge,
       passedIds,
       matchedIds,
       nearby,
@@ -338,6 +377,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       coords,
       pendingFriendRequests,
       refreshFriendBadge,
+      pendingGroupRequests,
+      refreshGroupBadge,
       passedIds,
       matchedIds,
       nearby,
