@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -23,6 +24,7 @@ import {
   type LinkedIdentity,
   type SocialProvider,
 } from '@/lib/auth';
+import { bioAvailable, isBioLockEnabled, setBioLockEnabled } from '@/lib/biolock';
 import { fetchMyPosts, updateProfileFields } from '@/lib/db';
 import { moderateImage, type ModerationSource } from '@/lib/moderation';
 import { me } from '@/lib/people';
@@ -41,6 +43,8 @@ export default function MeScreen() {
   const [identities, setIdentities] = useState<LinkedIdentity[]>([]);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [bioLock, setBioLock] = useState(false);
+  const [bioSupported, setBioSupported] = useState(false);
 
   const isDemo = authStatus === 'demo';
   const name = profile?.name || me.name;
@@ -59,7 +63,14 @@ export default function MeScreen() {
   useEffect(() => {
     loadPosts();
     loadIdentities();
+    bioAvailable().then(setBioSupported).catch(() => {});
+    isBioLockEnabled().then(setBioLock).catch(() => {});
   }, [loadPosts, loadIdentities]);
+
+  const toggleBioLock = async (value: boolean) => {
+    setBioLock(value);
+    await setBioLockEnabled(value);
+  };
 
   const linked = (provider: string) => identities.some((i) => i.provider === provider);
   const hasPassword = linked('email');
@@ -319,6 +330,19 @@ export default function MeScreen() {
                 )}
               </View>
             ))}
+
+            {bioSupported ? (
+              <View style={styles.methodRow}>
+                <Ionicons name="finger-print" size={18} color={colors.text} />
+                <Text style={styles.methodLabel}>Quick unlock (fingerprint / face)</Text>
+                <Switch
+                  value={bioLock}
+                  onValueChange={toggleBioLock}
+                  trackColor={{ true: colors.accent, false: colors.line }}
+                  thumbColor={colors.white}
+                />
+              </View>
+            ) : null}
 
             {showPassword && !hasPassword ? (
               <View style={styles.passwordBox}>

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { signInWithEmail } from '@/lib/auth';
+import { requestEmailOtp, signInWithEmail, verifyEmailOtp } from '@/lib/auth';
 import { colors, radius } from '@/lib/theme';
 
 export default function SignInScreen() {
@@ -21,12 +21,48 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useOtp, setUseOtp] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [code, setCode] = useState('');
 
   const onSubmit = async () => {
     setError(null);
     setBusy(true);
     try {
       await signInWithEmail(email, password);
+      // AuthGate routes into the app automatically.
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSendCode = async () => {
+    setError(null);
+    if (!email.trim().includes('@')) return setError('Please enter your email first.');
+    setBusy(true);
+    try {
+      await requestEmailOtp(email);
+      setOtpSent(true);
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      setError(
+        msg.toLowerCase().includes('signups')
+          ? 'No account found with this email. Please sign up first.'
+          : msg
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onVerifyCode = async () => {
+    setError(null);
+    if (code.trim().length < 6) return setError('Enter the 6-digit code from your email.');
+    setBusy(true);
+    try {
+      await verifyEmailOtp(email, code);
       // AuthGate routes into the app automatically.
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -55,20 +91,70 @@ export default function SignInScreen() {
             keyboardType="email-address"
           />
 
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Your password"
-            placeholderTextColor={colors.muted}
-            secureTextEntry
-          />
+          {!useOtp ? (
+            <>
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Your password"
+                placeholderTextColor={colors.muted}
+                secureTextEntry
+              />
+            </>
+          ) : otpSent ? (
+            <>
+              <Text style={styles.label}>Code from your email</Text>
+              <TextInput
+                style={styles.input}
+                value={code}
+                onChangeText={setCode}
+                placeholder="6-digit code"
+                placeholderTextColor={colors.muted}
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+            </>
+          ) : (
+            <Text style={styles.otpHint}>
+              We'll email you a 6-digit code — no password needed.
+            </Text>
+          )}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Pressable style={[styles.submit, busy && styles.dim]} onPress={onSubmit} disabled={busy}>
-            <Text style={styles.submitText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
+          {!useOtp ? (
+            <Pressable style={[styles.submit, busy && styles.dim]} onPress={onSubmit} disabled={busy}>
+              <Text style={styles.submitText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
+            </Pressable>
+          ) : otpSent ? (
+            <Pressable
+              style={[styles.submit, busy && styles.dim]}
+              onPress={onVerifyCode}
+              disabled={busy}>
+              <Text style={styles.submitText}>{busy ? 'Checking…' : 'Verify code'}</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[styles.submit, busy && styles.dim]}
+              onPress={onSendCode}
+              disabled={busy}>
+              <Text style={styles.submitText}>{busy ? 'Sending…' : 'Email me a code'}</Text>
+            </Pressable>
+          )}
+
+          <Pressable
+            style={styles.switchMode}
+            onPress={() => {
+              setUseOtp((v) => !v);
+              setOtpSent(false);
+              setCode('');
+              setError(null);
+            }}>
+            <Text style={styles.switchModeText}>
+              {useOtp ? 'Use password instead' : 'Sign in with an email code instead'}
+            </Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -102,4 +188,7 @@ const styles = StyleSheet.create({
   },
   submitText: { color: colors.white, fontWeight: '800', fontSize: 16 },
   dim: { opacity: 0.6 },
+  otpHint: { color: colors.muted, marginTop: 16, lineHeight: 20 },
+  switchMode: { alignItems: 'center', marginTop: 18 },
+  switchModeText: { color: colors.gold, fontWeight: '700' },
 });

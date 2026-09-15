@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 
+import { useApp } from '@/context/AppContext';
 import { colors } from '@/lib/theme';
 
 export default function TabLayout() {
+  const { pendingFriendRequests } = useApp();
   return (
     <Tabs
       screenOptions={{
@@ -34,6 +36,17 @@ export default function TabLayout() {
           title: 'Feed',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="images" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="friends"
+        options={{
+          title: 'Friends',
+          tabBarBadge: pendingFriendRequests > 0 ? pendingFriendRequests : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.accent, color: colors.white },
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people" size={size} color={color} />
           ),
         }}
       />

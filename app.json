@@ -63,6 +63,18 @@
         }
       ],
       [
+        "expo-contacts",
+        {
+          "contactsPermission": "Matcharound checks your contacts to show which of your friends already use the app."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Matcharound uses Face ID to quickly and securely unlock the app."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Matcharound lets you add profile, cover, and gallery photos."

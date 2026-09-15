@@ -148,6 +148,29 @@ export async function setPassword(newPassword: string): Promise<void> {
   if (error) throw error;
 }
 
+// ---------- Passwordless: email OTP code (free) ----------
+
+/** Email a 6-digit sign-in code (works for existing accounts). */
+export async function requestEmailOtp(email: string): Promise<void> {
+  if (!supabase) throw new Error('Backend not configured');
+  const { error } = await supabase.auth.signInWithOtp({
+    email: email.trim(),
+    options: { shouldCreateUser: false },
+  });
+  if (error) throw error;
+}
+
+/** Verify the emailed code and sign in. */
+export async function verifyEmailOtp(email: string, code: string): Promise<void> {
+  if (!supabase) throw new Error('Backend not configured');
+  const { error } = await supabase.auth.verifyOtp({
+    email: email.trim(),
+    token: code.trim(),
+    type: 'email',
+  });
+  if (error) throw error;
+}
+
 /** Permanently delete the signed-in user's account (store policy requirement). */
 export async function deleteMyAccount(): Promise<void> {
   if (!supabase) throw new Error('Backend not configured');

@@ -1,11 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AppProvider, useApp } from '@/context/AppContext';
+import { bioAuthenticate, isBioLockEnabled } from '@/lib/biolock';
 import { colors } from '@/lib/theme';
 
 export { ErrorBoundary } from 'expo-router';
@@ -55,6 +58,59 @@ function AuthGate() {
   return null;
 }
 
+/** Fingerprint / face quick-unlock overlay (shown once per app open when enabled). */
+function BioLockGate() {
+  const [locked, setLocked] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    isBioLockEnabled().then((enabled) => setLocked(enabled ? true : false));
+  }, []);
+
+  useEffect(() => {
+    if (locked) tryUnlock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked === true]);
+
+  const tryUnlock = async () => {
+    const ok = await bioAuthenticate();
+    if (ok) setLocked(false);
+  };
+
+  if (!locked) return null;
+  return (
+    <View style={lockStyles.overlay}>
+      <Ionicons name="finger-print" size={64} color={colors.accent} />
+      <Text style={lockStyles.title}>Matcharound is locked</Text>
+      <Pressable style={lockStyles.btn} onPress={tryUnlock}>
+        <Text style={lockStyles.btnText}>Unlock</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const lockStyles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 18,
+    zIndex: 1000,
+  },
+  title: { color: colors.text, fontSize: 20, fontWeight: '800' },
+  btn: {
+    backgroundColor: colors.accent,
+    borderRadius: 14,
+    paddingHorizontal: 40,
+    paddingVertical: 13,
+  },
+  btnText: { color: colors.white, fontWeight: '800', fontSize: 16 },
+});
+
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -92,6 +148,7 @@ export default function RootLayout() {
             options={{ animation: 'fade', gestureEnabled: false }}
           />
         </Stack>
+        <BioLockGate />
       </ThemeProvider>
     </AppProvider>
   );

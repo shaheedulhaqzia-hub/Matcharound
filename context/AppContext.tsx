@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from 'react';
 
+import { Alert } from 'react-native';
+
 import {
   fetchLatestBanReason,
   fetchNearby,
@@ -16,6 +18,7 @@ import {
   recordLike,
   updateLocation,
 } from '@/lib/db';
+import { fetchIncomingRequests, heartbeat } from '@/lib/friends';
 import { people, setLivePeople } from '@/lib/people';
 import { supabase } from '@/lib/supabase';
 import type { AuthStatus, ChatMessage, Person, Profile, SearchFilters } from '@/lib/types';
@@ -39,6 +42,11 @@ type AppState = {
   setManualLocation: (query: string) => Promise<boolean>;
   /** Go back to searching around the real GPS position. */
   clearManualLocation: () => void;
+  /** Real GPS position of this user (null until permission granted). */
+  myCoords: { lat: number; lng: number } | null;
+  /** Incoming pending friend requests (drives tab badge + notifications). */
+  pendingFriendRequests: number;
+  refreshFriendBadge: () => Promise<void>;
   passedIds: string[];
   matchedIds: string[];
   nearby: Person[];
@@ -77,6 +85,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [radiusKm, setRadiusKm] = useState(10);
   const [passedIds, setPassedIds] = useState<string[]>([]);
   const [matchedIds, setMatchedIds] = useState<string[]>(['p1']);
+  const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(starterChats);
 
   const applySession = useCallback(async (sessionUserId: string | null) => {
@@ -159,6 +168,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [center?.lat, center?.lng, radiusKm, filters]);
+
+  // Presence heartbeat: online + last seen + live position, every minute.
+  useEffect(() => {
+    if (authStatus !== 'ready' || !userId) return;
+    let cancelled = false;
+    const beat = async () => {
+      try {
+        const pos = await Location.getLastKnownPositionAsync();
+        if (cancelled) return;
+        if (pos) setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        await heartbeat(pos?.coords.latitude, pos?.coords.longitude);
+      } catch {
+        // offline is fine; next beat retries
+      }
+    };
+    beat();
+    const timer = setInterval(beat, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [authStatus, userId]);
+
+  const refreshFriendBadge = useCallback(async () => {
+    if (!userId) return;
+    const reqs = await fetchIncomingRequests(userId);
+    setPendingFriendRequests(reqs.length);
+  }, [userId]);
+
+  // Friend request notifications: badge count + realtime in-app alert.
+  useEffect(() => {
+    if (authStatus !== 'ready' || !userId || !supabase) return;
+    refreshFriendBadge();
+    const channel = supabase
+      .channel('friend-requests')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'friend_requests',
+          filter: `to_id=eq.${userId}`,
+        },
+        () => {
+          setPendingFriendRequests((n) => n + 1);
+          Alert.alert('New friend request', 'Someone wants to be your friend. See the Friends tab.');
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase?.removeChannel(channel);
+    };
+  }, [authStatus, userId, refreshFriendBadge]);
 
   const setManualLocation = useCallback(async (query: string): Promise<boolean> => {
     const q = query.trim();
@@ -248,6 +310,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       locationLabel: manualPlace?.label ?? null,
       setManualLocation,
       clearManualLocation,
+      myCoords: coords,
+      pendingFriendRequests,
+      refreshFriendBadge,
       passedIds,
       matchedIds,
       nearby,
@@ -270,6 +335,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       manualPlace,
       setManualLocation,
       clearManualLocation,
+      coords,
+      pendingFriendRequests,
+      refreshFriendBadge,
       passedIds,
       matchedIds,
       nearby,
