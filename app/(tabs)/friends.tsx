@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Contacts from 'expo-contacts';
+import { Contact, ContactField, requestPermissionsAsync } from 'expo-contacts';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -88,7 +88,7 @@ export default function FriendsScreen() {
     if (!userId) return;
     setScanning(true);
     try {
-      const { status } = await Contacts.requestPermissionsAsync();
+      const { status } = await requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
           'Contacts permission needed',
@@ -96,15 +96,23 @@ export default function FriendsScreen() {
         );
         return;
       }
-      const { data } = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.PhoneNumbers],
-      });
       const phones = new Set<string>();
-      for (const contact of data) {
-        for (const p of contact.phoneNumbers ?? []) {
-          const normalized = p.number ? normalizePhone(p.number) : null;
-          if (normalized) phones.add(normalized);
+      const pageSize = 250;
+      let offset = 0;
+      for (;;) {
+        const batch = await Contact.getAllDetails([ContactField.PHONES], {
+          limit: pageSize,
+          offset,
+        });
+        for (const contact of batch) {
+          for (const p of contact.phones ?? []) {
+            const raw = typeof p.number === 'string' ? p.number : '';
+            const normalized = raw ? normalizePhone(raw) : null;
+            if (normalized) phones.add(normalized);
+          }
         }
+        if (batch.length < pageSize) break;
+        offset += pageSize;
       }
       const found = await findByPhones([...phones]);
       const friendIds = new Set(friends.map((f) => f.id));
