@@ -302,8 +302,6 @@ export default function MeScreen() {
               [
                 { key: 'email', label: 'Email + password', icon: 'mail' },
                 { key: 'google', label: 'Google', icon: 'logo-google' },
-                { key: 'facebook', label: 'Facebook', icon: 'logo-facebook' },
-                { key: 'twitter', label: 'X (Twitter)', icon: 'logo-twitter' },
               ] as const
             ).map((row) => (
               <View key={row.key} style={styles.methodRow}>

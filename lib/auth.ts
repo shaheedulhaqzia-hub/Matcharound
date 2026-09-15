@@ -5,7 +5,7 @@ import { supabase } from './supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
-export type SocialProvider = 'google' | 'facebook' | 'twitter';
+export type SocialProvider = 'google';
 
 export function ageFromDob(dob: Date): number {
   const now = new Date();

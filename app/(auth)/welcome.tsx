@@ -10,8 +10,6 @@ import { colors, radius } from '@/lib/theme';
 
 const socialButtons: { provider: SocialProvider; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { provider: 'google', label: 'Continue with Google', icon: 'logo-google' },
-  { provider: 'facebook', label: 'Continue with Facebook', icon: 'logo-facebook' },
-  { provider: 'twitter', label: 'Continue with X', icon: 'logo-twitter' },
 ];
 
 export default function WelcomeScreen() {
