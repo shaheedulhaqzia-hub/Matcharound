@@ -14,7 +14,11 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Matcharound uses the camera for video calls with nearby matches.",
         "NSMicrophoneUsageDescription": "Matcharound uses the microphone for voice and video calls.",
-        "NSLocationWhenInUseUsageDescription": "Matcharound uses your location to show people near you."
+        "NSLocationWhenInUseUsageDescription": "Matcharound uses your location to show people near you.",
+        "NSContactsUsageDescription": "Matcharound checks your contacts to show which of your friends already use the app.",
+        "NSFaceIDUsageDescription": "Matcharound uses Face ID to quickly and securely unlock the app.",
+        "NSPhotoLibraryUsageDescription": "Matcharound lets you add profile, cover, and gallery photos.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
