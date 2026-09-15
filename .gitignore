@@ -40,6 +40,13 @@ yarn-error.*
 .env*.local
 !.env.example
 
+# local credentials notes (never commit)
+creds.local.md
+*.local.md
+
+# supabase CLI cache
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 
