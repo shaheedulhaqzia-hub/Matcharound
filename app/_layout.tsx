@@ -1,14 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AppProvider, useApp } from '@/context/AppContext';
 import { bioAuthenticate, isBioLockEnabled } from '@/lib/biolock';
+import { setCallStatus, subscribeIncomingCalls } from '@/lib/calls';
+import { fetchPersonById } from '@/lib/db';
 import { colors } from '@/lib/theme';
 
 export { ErrorBoundary } from 'expo-router';
@@ -54,6 +56,40 @@ function AuthGate() {
       router.replace('/(tabs)');
     }
   }, [authStatus, segments, router]);
+
+  return null;
+}
+
+/** Rings the callee when someone starts a live voice or video call. */
+function IncomingCallWatcher() {
+  const { userId, authStatus } = useApp();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (authStatus !== 'ready' || !userId) return;
+    return subscribeIncomingCalls(userId, async (call) => {
+      const person = await fetchPersonById(call.fromId);
+      const name = person?.name ?? 'Someone';
+      Alert.alert(
+        call.mode === 'video' ? 'Incoming video call' : 'Incoming voice call',
+        `${name} is calling you.`,
+        [
+          {
+            text: 'Decline',
+            style: 'destructive',
+            onPress: () => setCallStatus(call.id, 'declined'),
+          },
+          {
+            text: 'Accept',
+            onPress: () =>
+              router.push(
+                `/call/${call.fromId}?mode=${call.mode}&callId=${call.id}&incoming=1` as Href
+              ),
+          },
+        ]
+      );
+    });
+  }, [authStatus, userId, router]);
 
   return null;
 }
@@ -131,6 +167,7 @@ export default function RootLayout() {
       <ThemeProvider value={navTheme}>
         <StatusBar style="light" />
         <AuthGate />
+        <IncomingCallWatcher />
         <Stack
           screenOptions={{
             headerShown: false,

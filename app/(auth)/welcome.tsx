@@ -51,15 +51,6 @@ export default function WelcomeScreen() {
             <Text style={styles.socialText}>{busy === b.provider ? 'Opening…' : b.label}</Text>
           </Pressable>
         ))}
-        <Pressable
-          style={[styles.social, styles.dim]}
-          onPress={() =>
-            Alert.alert('TikTok', 'TikTok sign-in is coming soon. Please use another option.')
-          }>
-          <Ionicons name="logo-tiktok" size={20} color={colors.muted} />
-          <Text style={[styles.socialText, { color: colors.muted }]}>TikTok — coming soon</Text>
-        </Pressable>
-
         <Pressable style={styles.primary} onPress={() => router.push('/(auth)/sign-up')}>
           <Ionicons name="mail" size={18} color={colors.white} />
           <Text style={styles.primaryText}>Sign up with email</Text>

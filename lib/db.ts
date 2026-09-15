@@ -19,6 +19,29 @@ function rowToProfile(row: Record<string, any>): Profile {
   };
 }
 
+/** Minimal person card for chat / calls when they are not in the nearby deck. */
+export async function fetchPersonById(id: string): Promise<Person | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, age, city, bio, job, interests, photo, online')
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    id: String(data.id),
+    name: String(data.name ?? ''),
+    age: Number(data.age ?? 0),
+    distanceKm: 0,
+    city: String(data.city ?? ''),
+    bio: String(data.bio ?? ''),
+    job: String(data.job ?? ''),
+    interests: Array.isArray(data.interests) ? data.interests.map(String) : [],
+    photo: String(data.photo ?? ''),
+    online: Boolean(data.online),
+  };
+}
+
 export async function fetchProfile(userId: string): Promise<Profile | null> {
   if (!supabase) return null;
   const { data, error } = await supabase

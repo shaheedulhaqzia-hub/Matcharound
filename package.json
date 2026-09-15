@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@config-plugins/react-native-webrtc": "^15.0.2",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "@supabase/supabase-js": "^2.112.4",
@@ -33,6 +34,7 @@
     "react-native-screens": "~4.26.0",
     "react-native-url-polyfill": "^4.0.0",
     "react-native-web": "~0.21.0",
+    "react-native-webrtc": "^124.0.8",
     "react-native-webview": "13.16.1",
     "react-native-worklets": "0.10.1"
   },

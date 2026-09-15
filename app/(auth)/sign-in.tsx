@@ -12,31 +12,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { requestEmailOtp, signInWithEmail, verifyEmailOtp } from '@/lib/auth';
+import { requestEmailOtp, verifyEmailOtp } from '@/lib/auth';
 import { colors, radius } from '@/lib/theme';
 
 export default function SignInScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [useOtp, setUseOtp] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [code, setCode] = useState('');
-
-  const onSubmit = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      await signInWithEmail(email, password);
-      // AuthGate routes into the app automatically.
-    } catch (e: any) {
-      setError(String(e?.message ?? e));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const onSendCode = async () => {
     setError(null);
@@ -63,7 +48,6 @@ export default function SignInScreen() {
     setBusy(true);
     try {
       await verifyEmailOtp(email, code);
-      // AuthGate routes into the app automatically.
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -79,6 +63,7 @@ export default function SignInScreen() {
             <Ionicons name="chevron-back" size={26} color={colors.text} />
           </Pressable>
           <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.sub}>We’ll email you a 6-digit code. No phone or WhatsApp codes.</Text>
 
           <Text style={styles.label}>Email</Text>
           <TextInput
@@ -89,21 +74,10 @@ export default function SignInScreen() {
             placeholderTextColor={colors.muted}
             autoCapitalize="none"
             keyboardType="email-address"
+            editable={!otpSent}
           />
 
-          {!useOtp ? (
-            <>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Your password"
-                placeholderTextColor={colors.muted}
-                secureTextEntry
-              />
-            </>
-          ) : otpSent ? (
+          {otpSent ? (
             <>
               <Text style={styles.label}>Code from your email</Text>
               <TextInput
@@ -116,19 +90,11 @@ export default function SignInScreen() {
                 maxLength={6}
               />
             </>
-          ) : (
-            <Text style={styles.otpHint}>
-              We'll email you a 6-digit code — no password needed.
-            </Text>
-          )}
+          ) : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {!useOtp ? (
-            <Pressable style={[styles.submit, busy && styles.dim]} onPress={onSubmit} disabled={busy}>
-              <Text style={styles.submitText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
-            </Pressable>
-          ) : otpSent ? (
+          {otpSent ? (
             <Pressable
               style={[styles.submit, busy && styles.dim]}
               onPress={onVerifyCode}
@@ -144,18 +110,17 @@ export default function SignInScreen() {
             </Pressable>
           )}
 
-          <Pressable
-            style={styles.switchMode}
-            onPress={() => {
-              setUseOtp((v) => !v);
-              setOtpSent(false);
-              setCode('');
-              setError(null);
-            }}>
-            <Text style={styles.switchModeText}>
-              {useOtp ? 'Use password instead' : 'Sign in with an email code instead'}
-            </Text>
-          </Pressable>
+          {otpSent ? (
+            <Pressable
+              style={styles.switchMode}
+              onPress={() => {
+                setOtpSent(false);
+                setCode('');
+                setError(null);
+              }}>
+              <Text style={styles.switchModeText}>Use a different email</Text>
+            </Pressable>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -166,7 +131,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   body: { padding: 22 },
   back: { marginBottom: 6 },
-  title: { color: colors.text, fontSize: 30, fontWeight: '800', marginBottom: 12 },
+  title: { color: colors.text, fontSize: 30, fontWeight: '800' },
+  sub: { color: colors.muted, marginTop: 8, marginBottom: 8, lineHeight: 20 },
   label: { color: colors.gold, fontWeight: '700', fontSize: 13, marginTop: 14, marginBottom: 6 },
   input: {
     backgroundColor: colors.card,
@@ -188,7 +154,6 @@ const styles = StyleSheet.create({
   },
   submitText: { color: colors.white, fontWeight: '800', fontSize: 16 },
   dim: { opacity: 0.6 },
-  otpHint: { color: colors.muted, marginTop: 16, lineHeight: 20 },
   switchMode: { alignItems: 'center', marginTop: 18 },
   switchModeText: { color: colors.gold, fontWeight: '700' },
 });

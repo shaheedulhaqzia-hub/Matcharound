@@ -1,51 +1,90 @@
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApp } from '@/context/AppContext';
+import { fetchConversations, type Conversation } from '@/lib/chat';
 import { formatDistance } from '@/lib/people';
 import { colors, radius } from '@/lib/theme';
 
 export default function MessagesScreen() {
   const router = useRouter();
-  const { messages, matches } = useApp();
-  const threads = matches.filter((p) => (messages[p.id] ?? []).length > 0);
-  const idle = matches.filter((p) => (messages[p.id] ?? []).length === 0);
+  const { messages, matches, userId } = useApp();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (userId) fetchConversations().then(setConversations);
+    }, [userId])
+  );
+
+  const demoThreads = matches.filter((p) => (messages[p.id] ?? []).length > 0);
+  const idle = userId
+    ? matches.filter((p) => !conversations.some((c) => c.personId === p.id))
+    : matches.filter((p) => (messages[p.id] ?? []).length === 0);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Text style={styles.title}>Chat</Text>
-      <Text style={styles.sub}>Typing, voice, and video — only with nearby matches.</Text>
+      <Text style={styles.sub}>Real messages with your matches — plus live voice and video.</Text>
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        {threads.length === 0 && idle.length === 0 ? (
-          <Text style={styles.empty}>Match with someone nearby to start typing.</Text>
+        {userId && conversations.length === 0 && idle.length === 0 ? (
+          <Text style={styles.empty}>Match or add a friend, then start typing.</Text>
         ) : null}
-        {threads.map((person) => {
-          const last = messages[person.id]?.at(-1);
-          return (
-            <Pressable key={person.id} style={styles.row} onPress={() => router.push(`/chat/${person.id}`)}>
-              <Image source={{ uri: person.photo }} style={styles.avatar} />
-              <View style={styles.meta}>
-                <View style={styles.top}>
-                  <Text style={styles.name}>{person.name}</Text>
-                  <Text style={styles.dist}>{formatDistance(person.distanceKm)}</Text>
+
+        {userId
+          ? conversations.map((c) => (
+              <Pressable
+                key={c.personId}
+                style={styles.row}
+                onPress={() => router.push(`/chat/${c.personId}`)}>
+                <Image source={{ uri: c.photo }} style={styles.avatar} />
+                <View style={styles.meta}>
+                  <View style={styles.top}>
+                    <Text style={styles.name}>{c.name}</Text>
+                    <Text style={styles.dist}>{c.city}</Text>
+                  </View>
+                  <Text style={styles.preview} numberOfLines={1}>
+                    {c.lastFromMe ? 'You: ' : ''}
+                    {c.lastImage ? 'Photo' : c.lastText}
+                  </Text>
                 </View>
-                <Text style={styles.preview} numberOfLines={1}>
-                  {last?.fromMe ? 'You: ' : ''}
-                  {last?.text}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
+              </Pressable>
+            ))
+          : demoThreads.map((person) => {
+              const last = messages[person.id]?.at(-1);
+              return (
+                <Pressable
+                  key={person.id}
+                  style={styles.row}
+                  onPress={() => router.push(`/chat/${person.id}`)}>
+                  <Image source={{ uri: person.photo }} style={styles.avatar} />
+                  <View style={styles.meta}>
+                    <View style={styles.top}>
+                      <Text style={styles.name}>{person.name}</Text>
+                      <Text style={styles.dist}>{formatDistance(person.distanceKm)}</Text>
+                    </View>
+                    <Text style={styles.preview} numberOfLines={1}>
+                      {last?.fromMe ? 'You: ' : ''}
+                      {last?.text}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+
         {idle.length > 0 ? <Text style={styles.section}>Say hi</Text> : null}
         {idle.map((person) => (
           <Pressable key={person.id} style={styles.row} onPress={() => router.push(`/chat/${person.id}`)}>
             <Image source={{ uri: person.photo }} style={styles.avatar} />
             <View style={styles.meta}>
               <Text style={styles.name}>{person.name}</Text>
-              <Text style={styles.preview}>Start a conversation · {formatDistance(person.distanceKm)}</Text>
+              <Text style={styles.preview}>
+                Start a conversation
+                {person.distanceKm ? ` · ${formatDistance(person.distanceKm)}` : ''}
+              </Text>
             </View>
           </Pressable>
         ))}

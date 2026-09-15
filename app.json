@@ -79,6 +79,13 @@
         {
           "photosPermission": "Matcharound lets you add profile, cover, and gallery photos."
         }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Matcharound uses the camera for live video calls.",
+          "microphonePermission": "Matcharound uses the microphone for live voice and video calls."
+        }
       ]
     ],
     "extra": {
