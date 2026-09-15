@@ -7,6 +7,7 @@ function rowToProfile(row: Record<string, any>): Profile {
     name: String(row.name ?? ''),
     age: Number(row.age ?? 0),
     dob: row.dob ? String(row.dob) : null,
+    phone: row.phone ? String(row.phone) : null,
     city: String(row.city ?? ''),
     bio: String(row.bio ?? ''),
     job: String(row.job ?? ''),
@@ -32,6 +33,7 @@ export async function upsertProfile(profile: {
   name: string;
   dob: string;
   age: number;
+  phone?: string;
   bio?: string;
   job?: string;
   city?: string;
@@ -40,7 +42,21 @@ export async function upsertProfile(profile: {
 }): Promise<void> {
   if (!supabase) throw new Error('Backend not configured');
   const { error } = await supabase.from('profiles').upsert(profile, { onConflict: 'id' });
-  if (error) throw error;
+  if (error) {
+    if (error.code === '23505' && String(error.message).includes('phone')) {
+      throw new Error('This phone number is already used by another account.');
+    }
+    throw error;
+  }
+}
+
+/** True when another account already uses this (normalized) phone number. */
+export async function phoneInUse(phone: string, exceptUserId?: string): Promise<boolean> {
+  if (!supabase) return false;
+  let query = supabase.from('profiles').select('id').eq('phone', phone).limit(1);
+  if (exceptUserId) query = query.neq('id', exceptUserId);
+  const { data } = await query;
+  return Boolean(data && data.length > 0);
 }
 
 export async function updateProfileFields(

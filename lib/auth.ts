@@ -35,6 +35,17 @@ export function toIsoDate(d: Date): string {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+/**
+ * Normalize a phone number to "+<digits>" (or plain digits when no +).
+ * Returns null when it doesn't look like a real phone number.
+ */
+export function normalizePhone(input: string): string | null {
+  const trimmed = input.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) return null;
+  return (trimmed.startsWith('+') ? '+' : '') + digits;
+}
+
 export async function signUpWithEmail(email: string, password: string) {
   if (!supabase) throw new Error('Backend not configured');
   const { error } = await supabase.auth.signUp({ email: email.trim(), password });
@@ -66,8 +77,13 @@ export async function signInWithProvider(provider: SocialProvider) {
   });
   if (error) throw error;
   if (!data?.url) throw new Error('No auth URL returned');
+  return finishOAuthInBrowser(data.url, redirectTo);
+}
 
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+/** Open the provider page in a browser and turn the redirect into a session. */
+async function finishOAuthInBrowser(authUrl: string, redirectTo: string): Promise<boolean> {
+  if (!supabase) throw new Error('Backend not configured');
+  const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo);
   if (result.type !== 'success' || !result.url) return false;
 
   const returned = new URL(result.url);
@@ -89,4 +105,53 @@ export async function signInWithProvider(provider: SocialProvider) {
     return true;
   }
   return false;
+}
+
+// ---------- One account, many sign-in methods ----------
+
+export type LinkedIdentity = { provider: string; email: string | null };
+
+/** Which sign-in methods are attached to the current account. */
+export async function getLinkedIdentities(): Promise<LinkedIdentity[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.auth.getUserIdentities();
+  if (error || !data?.identities) return [];
+  return data.identities.map((i) => ({
+    provider: String(i.provider),
+    email: i.identity_data?.email ? String(i.identity_data.email) : null,
+  }));
+}
+
+/**
+ * Attach another sign-in method (Google / Facebook / X) to the CURRENT
+ * account, so the user always has one single Matcharound account.
+ */
+export async function linkProvider(provider: SocialProvider): Promise<boolean> {
+  if (!supabase) throw new Error('Backend not configured');
+  const redirectTo = Linking.createURL('auth-callback');
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider,
+    options: { redirectTo, skipBrowserRedirect: true },
+  });
+  if (error) throw error;
+  if (!data?.url) throw new Error('No auth URL returned');
+  return finishOAuthInBrowser(data.url, redirectTo);
+}
+
+/**
+ * Let social sign-ups add a password, so they can also sign in with
+ * email + password later.
+ */
+export async function setPassword(newPassword: string): Promise<void> {
+  if (!supabase) throw new Error('Backend not configured');
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+/** Permanently delete the signed-in user's account (store policy requirement). */
+export async function deleteMyAccount(): Promise<void> {
+  if (!supabase) throw new Error('Backend not configured');
+  const { error } = await supabase.rpc('delete_me');
+  if (error) throw error;
+  await supabase.auth.signOut();
 }

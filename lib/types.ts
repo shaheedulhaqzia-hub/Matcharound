@@ -16,6 +16,7 @@ export type Profile = {
   name: string;
   age: number;
   dob: string | null;
+  phone: string | null;
   city: string;
   bio: string;
   job: string;

@@ -14,7 +14,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApp } from '@/context/AppContext';
-import { signOut } from '@/lib/auth';
+import {
+  deleteMyAccount,
+  getLinkedIdentities,
+  linkProvider,
+  setPassword as setAccountPassword,
+  signOut,
+  type LinkedIdentity,
+  type SocialProvider,
+} from '@/lib/auth';
 import { fetchMyPosts, updateProfileFields } from '@/lib/db';
 import { moderateImage, type ModerationSource } from '@/lib/moderation';
 import { me } from '@/lib/people';
@@ -30,6 +38,9 @@ export default function MeScreen() {
   const [job, setJob] = useState('');
   const [city, setCity] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [identities, setIdentities] = useState<LinkedIdentity[]>([]);
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const isDemo = authStatus === 'demo';
   const name = profile?.name || me.name;
@@ -41,9 +52,72 @@ export default function MeScreen() {
     if (userId) setMyPosts(await fetchMyPosts(userId));
   }, [userId]);
 
+  const loadIdentities = useCallback(async () => {
+    if (userId) setIdentities(await getLinkedIdentities());
+  }, [userId]);
+
   useEffect(() => {
     loadPosts();
-  }, [loadPosts]);
+    loadIdentities();
+  }, [loadPosts, loadIdentities]);
+
+  const linked = (provider: string) => identities.some((i) => i.provider === provider);
+  const hasPassword = linked('email');
+
+  const onLink = async (provider: SocialProvider) => {
+    setBusy(`link_${provider}`);
+    try {
+      const ok = await linkProvider(provider);
+      if (ok) await loadIdentities();
+    } catch (e: any) {
+      Alert.alert('Could not link account', String(e?.message ?? e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onSavePassword = async () => {
+    if (newPassword.length < 6) {
+      Alert.alert('Password too short', 'Use at least 6 characters.');
+      return;
+    }
+    setBusy('password');
+    try {
+      await setAccountPassword(newPassword);
+      setNewPassword('');
+      setShowPassword(false);
+      await loadIdentities();
+      Alert.alert('Password saved', 'You can now also sign in with your email and password.');
+    } catch (e: any) {
+      Alert.alert('Could not save password', String(e?.message ?? e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onDeleteAccount = () => {
+    Alert.alert(
+      'Delete account?',
+      'This permanently removes your profile, photos, matches and messages. This cannot be undone.',
+      [
+        { text: 'Keep my account', style: 'cancel' },
+        {
+          text: 'Delete forever',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy('delete');
+            try {
+              await deleteMyAccount();
+            } catch (e: any) {
+              Alert.alert('Could not delete account', String(e?.message ?? e));
+            } finally {
+              setBusy(null);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const changePhoto = async (kind: 'profile_photo' | 'cover_photo') => {
     if (!userId) {
@@ -205,11 +279,92 @@ export default function MeScreen() {
           </Text>
         )}
 
+        {/* Account & sign-in methods */}
+        {!isDemo ? (
+          <View style={styles.accountCard}>
+            <Text style={styles.accountTitle}>Account</Text>
+            <Text style={styles.accountSub}>
+              One account, many ways to sign in. Link them all — you'll never lose access.
+            </Text>
+
+            {(
+              [
+                { key: 'email', label: 'Email + password', icon: 'mail' },
+                { key: 'google', label: 'Google', icon: 'logo-google' },
+                { key: 'facebook', label: 'Facebook', icon: 'logo-facebook' },
+                { key: 'twitter', label: 'X (Twitter)', icon: 'logo-twitter' },
+              ] as const
+            ).map((row) => (
+              <View key={row.key} style={styles.methodRow}>
+                <Ionicons name={row.icon} size={18} color={colors.text} />
+                <Text style={styles.methodLabel}>{row.label}</Text>
+                {linked(row.key) ? (
+                  <View style={styles.linkedPill}>
+                    <Ionicons name="checkmark" size={13} color={colors.white} />
+                    <Text style={styles.linkedPillText}>Linked</Text>
+                  </View>
+                ) : row.key === 'email' ? (
+                  <Pressable onPress={() => setShowPassword(true)} hitSlop={8}>
+                    <Text style={styles.linkAction}>Add password</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={() => onLink(row.key)}
+                    disabled={busy === `link_${row.key}`}
+                    hitSlop={8}>
+                    <Text style={styles.linkAction}>
+                      {busy === `link_${row.key}` ? 'Linking…' : 'Link'}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            ))}
+
+            {showPassword && !hasPassword ? (
+              <View style={styles.passwordBox}>
+                <TextInput
+                  style={styles.input}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="New password (min 6 characters)"
+                  placeholderTextColor={colors.muted}
+                  secureTextEntry
+                />
+                <View style={styles.editRow}>
+                  <Pressable style={styles.editCancel} onPress={() => setShowPassword(false)}>
+                    <Text style={styles.editCancelText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.editSave, busy === 'password' && styles.dim]}
+                    onPress={onSavePassword}
+                    disabled={busy === 'password'}>
+                    <Text style={styles.editSaveText}>
+                      {busy === 'password' ? 'Saving…' : 'Save password'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Sign out */}
         {!isDemo ? (
           <Pressable style={styles.signOut} onPress={() => signOut()}>
             <Ionicons name="log-out" size={18} color={colors.accent} />
             <Text style={styles.signOutText}>Sign out</Text>
+          </Pressable>
+        ) : null}
+
+        {/* Delete account (Google Play + Apple policy requirement) */}
+        {!isDemo ? (
+          <Pressable
+            style={styles.deleteAccount}
+            onPress={onDeleteAccount}
+            disabled={busy === 'delete'}>
+            <Text style={styles.deleteAccountText}>
+              {busy === 'delete' ? 'Deleting…' : 'Delete my account'}
+            </Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -342,4 +497,41 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   signOutText: { color: colors.accent, fontWeight: '700' },
+  accountCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    marginHorizontal: 18,
+    marginTop: 26,
+    padding: 16,
+  },
+  accountTitle: { color: colors.text, fontSize: 18, fontWeight: '800' },
+  accountSub: { color: colors.muted, marginTop: 4, marginBottom: 8, fontSize: 13, lineHeight: 18 },
+  methodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 11,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+  methodLabel: { color: colors.text, fontWeight: '600', flex: 1 },
+  linkedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#2e7d32',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  linkedPillText: { color: colors.white, fontSize: 12, fontWeight: '700' },
+  linkAction: { color: colors.accent, fontWeight: '700' },
+  passwordBox: { marginTop: 10 },
+  deleteAccount: {
+    alignItems: 'center',
+    marginTop: 14,
+    marginHorizontal: 18,
+    paddingVertical: 12,
+  },
+  deleteAccountText: { color: colors.muted, fontWeight: '600', textDecorationLine: 'underline' },
 });

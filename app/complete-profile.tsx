@@ -11,14 +11,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApp } from '@/context/AppContext';
-import { ageFromDob, parseDob, toIsoDate } from '@/lib/auth';
-import { upsertProfile } from '@/lib/db';
+import { ageFromDob, normalizePhone, parseDob, toIsoDate } from '@/lib/auth';
+import { phoneInUse, upsertProfile } from '@/lib/db';
 import { colors, radius } from '@/lib/theme';
 
-/** Social sign-ups land here: name + date of birth are mandatory (18+). */
+/** Social sign-ups land here: name, phone + date of birth are mandatory (18+). */
 export default function CompleteProfileScreen() {
   const { userId, profile, refreshProfile } = useApp();
   const [name, setName] = useState(profile?.name ?? '');
+  const [phone, setPhone] = useState(profile?.phone ?? '');
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
@@ -28,7 +29,9 @@ export default function CompleteProfileScreen() {
   const onSubmit = async () => {
     setError(null);
     if (!userId) return;
-    if (!name.trim()) return setError('Please enter your name.');
+    if (!name.trim()) return setError('Please enter your full name.');
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) return setError('Please enter a valid phone number.');
     const dob = parseDob(day, month, year);
     if (!dob) return setError('Please enter a valid date of birth (DD MM YYYY).');
     const age = ageFromDob(dob);
@@ -37,11 +40,19 @@ export default function CompleteProfileScreen() {
 
     setBusy(true);
     try {
+      if (await phoneInUse(normalizedPhone, userId)) {
+        setError(
+          'This phone number already belongs to another account. ' +
+            'If that account is yours, sign in with it instead — you can link Google, Facebook and X to it in your profile.'
+        );
+        return;
+      }
       await upsertProfile({
         id: userId,
         name: name.trim(),
         dob: toIsoDate(dob),
         age,
+        phone: normalizedPhone,
         bio: profile?.bio ?? '',
         job: profile?.job ?? '',
         city: profile?.city ?? '',
@@ -60,16 +71,26 @@ export default function CompleteProfileScreen() {
         <View style={styles.body}>
           <Text style={styles.title}>One last step</Text>
           <Text style={styles.sub}>
-            Matcharound is 18+. Add your name and date of birth to continue.
+            Matcharound is 18+. Add your name, phone number and date of birth to continue.
           </Text>
 
-          <Text style={styles.label}>Name</Text>
+          <Text style={styles.label}>Full name</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="Your first name"
+            placeholder="Your full name"
             placeholderTextColor={colors.muted}
+          />
+
+          <Text style={styles.label}>Phone number</Text>
+          <TextInput
+            style={styles.input}
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="+92 300 1234567"
+            placeholderTextColor={colors.muted}
+            keyboardType="phone-pad"
           />
 
           <Text style={styles.label}>Date of birth</Text>
