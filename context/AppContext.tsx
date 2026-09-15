@@ -21,7 +21,7 @@ import {
 } from '@/lib/db';
 import { fetchIncomingRequests, heartbeat } from '@/lib/friends';
 import { fetchAdminPendingCount } from '@/lib/groups';
-import { people, setLivePeople } from '@/lib/people';
+import { setLivePeople } from '@/lib/people';
 import { supabase } from '@/lib/supabase';
 import type { AuthStatus, ChatMessage, Person, Profile, SearchFilters } from '@/lib/types';
 
@@ -65,17 +65,6 @@ type AppState = {
 
 const AppContext = createContext<AppState | null>(null);
 
-const starterChats: Record<string, ChatMessage[]> = {
-  p1: [
-    {
-      id: 'm0',
-      fromMe: false,
-      text: 'Hey — you are basically around the corner. Coffee this week?',
-      at: Date.now() - 1000 * 60 * 40,
-    },
-  ],
-};
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const [authStatus, setAuthStatus] = useState<AuthStatus>('loading');
   const [userId, setUserId] = useState<string | null>(null);
@@ -86,7 +75,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     null
   );
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
-  const [directory, setDirectory] = useState<Person[]>(people);
+  const [directory, setDirectory] = useState<Person[]>([]);
   const [radiusKm, setRadiusKm] = useState(10);
   const [passedIds, setPassedIds] = useState<string[]>([]);
   const [matchedIds, setMatchedIds] = useState<string[]>([]);
@@ -116,12 +105,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAuthStatus('ready');
   }, []);
 
-  // Auth bootstrap + live session changes.
+  // Auth bootstrap + live session changes. Always live — no demo deck.
   useEffect(() => {
     if (!supabase) {
-      setAuthStatus('demo');
-      setMatchedIds(['p1']);
-      setMessages(starterChats);
+      setAuthStatus('signedOut');
       return;
     }
     let mounted = true;
@@ -166,14 +153,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Search from the manually chosen place, or the real GPS position.
   const center = manualPlace ?? coords;
 
-  // Nearby people ranked by true distance (demo list stays as fallback).
+  // Nearby people ranked by true GPS distance — live users only.
   useEffect(() => {
     if (!center) return;
     fetchNearby(center.lat, center.lng, Math.max(500, radiusKm), filters)
-      .then((list) => {
-        if (list.length || manualPlace || filters !== defaultFilters) setDirectory(list);
-      })
-      .catch(() => {});
+      .then(setDirectory)
+      .catch(() => setDirectory([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [center?.lat, center?.lng, radiusKm, filters]);
 

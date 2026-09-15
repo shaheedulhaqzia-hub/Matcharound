@@ -50,7 +50,7 @@ function AuthGate() {
     } else if (authStatus === 'banned' && first !== 'banned') {
       router.replace('/banned');
     } else if (
-      (authStatus === 'ready' || authStatus === 'demo') &&
+      authStatus === 'ready' &&
       (inAuth || first === 'complete-profile' || first === 'banned')
     ) {
       router.replace('/(tabs)');
