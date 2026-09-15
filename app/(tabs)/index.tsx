@@ -103,14 +103,18 @@ export default function NearbyScreen() {
     };
   }, []);
 
-  const onLike = () => {
+  const onLike = async () => {
     if (!person) return;
-    like(person.id);
+    const matched = await like(person.id);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    Alert.alert('It’s a match', `${person.name} is ${formatDistance(person.distanceKm)}. Say hi?`, [
-      { text: 'Keep browsing' },
-      { text: 'Open chat', onPress: () => router.push(`/chat/${person.id}`) },
-    ]);
+    if (matched) {
+      Alert.alert('It’s a match', `${person.name} is ${formatDistance(person.distanceKm)}. Say hi?`, [
+        { text: 'Keep browsing' },
+        { text: 'Open chat', onPress: () => router.push(`/chat/${person.id}`) },
+      ]);
+    } else {
+      Alert.alert('Like sent', `If ${person.name} likes you back, you’ll match.`);
+    }
   };
 
   return (

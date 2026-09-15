@@ -3,11 +3,16 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useApp } from '@/context/AppContext';
 import { follow, isFollowing, unfollow } from '@/lib/db';
+import {
+  friendshipStatus,
+  sendFriendRequest,
+  type FriendshipState,
+} from '@/lib/friends';
 import { formatDistance, personById } from '@/lib/people';
 import { colors, radius } from '@/lib/theme';
 
@@ -17,12 +22,28 @@ export default function PersonScreen() {
   const { like, matches, userId } = useApp();
   const person = personById(id ?? '');
   const [following, setFollowing] = useState(false);
+  const [friendState, setFriendState] = useState<FriendshipState>('none');
+  const [friendBusy, setFriendBusy] = useState(false);
 
   useEffect(() => {
     if (userId && id) {
       isFollowing(userId, id).then(setFollowing);
+      friendshipStatus(userId, id).then(setFriendState);
     }
   }, [userId, id]);
+
+  const addFriend = async () => {
+    if (!userId || !person || friendState !== 'none') return;
+    setFriendBusy(true);
+    try {
+      await sendFriendRequest(userId, person.id);
+      setFriendState('pending');
+    } catch (e: any) {
+      Alert.alert('Could not send request', String(e?.message ?? e));
+    } finally {
+      setFriendBusy(false);
+    }
+  };
 
   const toggleFollow = async () => {
     if (!userId || !person) return;
@@ -61,18 +82,41 @@ export default function PersonScreen() {
             {person.name}, {person.age}
           </Text>
           {userId ? (
-            <Pressable
-              style={[styles.follow, following && styles.followOn]}
-              onPress={toggleFollow}>
-              <Ionicons
-                name={following ? 'checkmark' : 'person-add'}
-                size={15}
-                color={following ? colors.green : colors.white}
-              />
-              <Text style={[styles.followText, following && styles.followTextOn]}>
-                {following ? 'Following' : 'Follow'}
-              </Text>
-            </Pressable>
+            <View style={styles.pillRow}>
+              <Pressable
+                style={[styles.follow, following && styles.followOn]}
+                onPress={toggleFollow}>
+                <Ionicons
+                  name={following ? 'checkmark' : 'person-add'}
+                  size={15}
+                  color={following ? colors.green : colors.white}
+                />
+                <Text style={[styles.followText, following && styles.followTextOn]}>
+                  {following ? 'Following' : 'Follow'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.follow, friendState !== 'none' && styles.followOn]}
+                onPress={addFriend}
+                disabled={friendBusy || friendState !== 'none'}>
+                <Ionicons
+                  name={friendState === 'friends' ? 'people' : 'person-add'}
+                  size={15}
+                  color={friendState === 'none' ? colors.white : colors.green}
+                />
+                <Text
+                  style={[
+                    styles.followText,
+                    friendState !== 'none' && styles.followTextOn,
+                  ]}>
+                  {friendState === 'friends'
+                    ? 'Friends'
+                    : friendState === 'pending'
+                      ? 'Requested'
+                      : 'Add friend'}
+                </Text>
+              </Pressable>
+            </View>
           ) : null}
         </View>
         <Text style={styles.job}>{person.job}</Text>
@@ -94,12 +138,13 @@ export default function PersonScreen() {
           {!matched ? (
             <Pressable
               style={styles.primary}
-              onPress={() => {
-                like(person.id);
-                router.push(`/chat/${person.id}`);
+              onPress={async () => {
+                const ok = await like(person.id);
+                if (ok) router.push(`/chat/${person.id}`);
+                else Alert.alert('Like sent', 'You’ll match if they like you back.');
               }}>
               <Ionicons name="heart" size={18} color={colors.white} />
-              <Text style={styles.primaryText}>Match & chat</Text>
+              <Text style={styles.primaryText}>Like</Text>
             </Pressable>
           ) : (
             <Pressable style={styles.primary} onPress={() => router.push(`/chat/${person.id}`)}>
@@ -140,8 +185,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   body: { paddingHorizontal: 20, paddingBottom: 40, marginTop: -40 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  nameRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   name: { color: colors.text, fontSize: 32, fontWeight: '800', flexShrink: 1 },
+  pillRow: { gap: 8, alignItems: 'flex-end' },
   follow: {
     flexDirection: 'row',
     alignItems: 'center',

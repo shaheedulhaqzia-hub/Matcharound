@@ -81,22 +81,34 @@ export async function fetchFriends(): Promise<Friend[]> {
 }
 
 /** Incoming pending friend requests, newest first. */
-export async function fetchIncomingRequests(userId: string): Promise<FriendRequest[]> {
+export async function fetchIncomingRequests(_userId?: string): Promise<FriendRequest[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from('friend_requests')
-    .select('id, from_id, created_at, profiles!friend_requests_from_id_fkey(name, photo)')
-    .eq('to_id', userId)
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false });
+  const { data, error } = await supabase.rpc('incoming_friend_requests');
   if (error || !data) return [];
   return (data as Record<string, any>[]).map((r) => ({
     id: String(r.id),
     fromId: String(r.from_id),
-    fromName: String(r.profiles?.name ?? ''),
-    fromPhoto: String(r.profiles?.photo ?? ''),
+    fromName: String(r.name ?? ''),
+    fromPhoto: String(r.photo ?? ''),
     createdAt: new Date(r.created_at).getTime(),
   }));
+}
+
+export type FriendshipState = 'none' | 'pending' | 'friends';
+
+export async function friendshipStatus(meId: string, otherId: string): Promise<FriendshipState> {
+  if (!supabase) return 'none';
+  const { data } = await supabase
+    .from('friend_requests')
+    .select('from_id, to_id, status')
+    .or(
+      `and(from_id.eq.${meId},to_id.eq.${otherId}),and(from_id.eq.${otherId},to_id.eq.${meId})`
+    )
+    .in('status', ['pending', 'accepted'])
+    .limit(2);
+  if (!data?.length) return 'none';
+  if (data.some((r) => r.status === 'accepted')) return 'friends';
+  return 'pending';
 }
 
 /** IDs I already sent a request to (pending or accepted). */

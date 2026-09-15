@@ -51,7 +51,7 @@ export default function FriendsScreen() {
     if (!userId) return;
     const [f, r, out] = await Promise.all([
       fetchFriends(),
-      fetchIncomingRequests(userId),
+      fetchIncomingRequests(),
       fetchOutgoingIds(userId),
     ]);
     setFriends(f);

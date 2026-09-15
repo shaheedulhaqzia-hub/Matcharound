@@ -31,7 +31,7 @@ const replies = [
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { messages, sendMessage, addIncoming, like, userId, markBanned } = useApp();
+  const { messages, sendMessage, addIncoming, userId, markBanned } = useApp();
   const person = personById(id ?? '');
   const thread = messages[id ?? ''] ?? [];
   const [draft, setDraft] = useState('');
@@ -39,10 +39,6 @@ export default function ChatScreen() {
   const [theyTyping, setTheyTyping] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const replyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (id) like(id);
-  }, [id]);
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });

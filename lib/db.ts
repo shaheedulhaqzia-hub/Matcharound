@@ -119,6 +119,18 @@ export async function recordLike(likerId: string, likedId: string): Promise<void
   );
 }
 
+/** True when the other person has already liked me (real match). */
+export async function theyLikedMe(meId: string, otherId: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { data } = await supabase
+    .from('likes')
+    .select('liker_id')
+    .eq('liker_id', otherId)
+    .eq('liked_id', meId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
 // ---------- Followers + gallery feed ----------
 
 export async function isFollowing(followerId: string, followeeId: string): Promise<boolean> {

@@ -16,6 +16,7 @@ import {
   fetchNearby,
   fetchProfile,
   recordLike,
+  theyLikedMe,
   updateLocation,
 } from '@/lib/db';
 import { fetchIncomingRequests, heartbeat } from '@/lib/friends';
@@ -55,7 +56,7 @@ type AppState = {
   matchedIds: string[];
   nearby: Person[];
   matches: Person[];
-  like: (id: string) => boolean;
+  like: (id: string) => Promise<boolean>;
   pass: (id: string) => void;
   messages: Record<string, ChatMessage[]>;
   sendMessage: (personId: string, text: string, imageUrl?: string) => void;
@@ -88,10 +89,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [directory, setDirectory] = useState<Person[]>(people);
   const [radiusKm, setRadiusKm] = useState(10);
   const [passedIds, setPassedIds] = useState<string[]>([]);
-  const [matchedIds, setMatchedIds] = useState<string[]>(['p1']);
+  const [matchedIds, setMatchedIds] = useState<string[]>([]);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [pendingGroupRequests, setPendingGroupRequests] = useState(0);
-  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(starterChats);
+  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
 
   const applySession = useCallback(async (sessionUserId: string | null) => {
     if (!sessionUserId) {
@@ -108,7 +109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAuthStatus('banned');
       return;
     }
-    if (!p || !p.dob) {
+    if (!p || !p.dob || !p.phone || !p.gender) {
       setAuthStatus('needsProfile');
       return;
     }
@@ -119,6 +120,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!supabase) {
       setAuthStatus('demo');
+      setMatchedIds(['p1']);
+      setMessages(starterChats);
       return;
     }
     let mounted = true;
@@ -198,7 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshFriendBadge = useCallback(async () => {
     if (!userId) return;
-    const reqs = await fetchIncomingRequests(userId);
+    const reqs = await fetchIncomingRequests();
     setPendingFriendRequests(reqs.length);
   }, [userId]);
 
@@ -292,11 +295,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [directory, matchedIds]
   );
 
-  const like = (id: string) => {
-    if (userId) recordLike(userId, id).catch(() => {});
+  const like = async (id: string) => {
     if (matchedIds.includes(id)) return false;
-    setMatchedIds((prev) => [...prev, id]);
-    return true;
+    if (!userId) {
+      setMatchedIds((prev) => [...prev, id]);
+      return true;
+    }
+    await recordLike(userId, id);
+    const mutual = await theyLikedMe(userId, id);
+    if (mutual) {
+      setMatchedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      return true;
+    }
+    return false;
   };
 
   const pass = (id: string) => {
